@@ -29,8 +29,6 @@ entity create_folder(char *title, short ops) {
   strcpy(folder.full_name, full_path);
   
   strcpy(folder.title, title);
-  folder.operations = ops;
-  folder.size = 0;
   folder.is_file = 0;
   folder.time_creation = time(NULL);
   for (size_t i = 0; i < COUNT_ENTITY; i++) folder.own_indexes[i] = -1;
@@ -45,7 +43,7 @@ entity create_folder(char *title, short ops) {
         }
       }
       
-      printf("[%d] Folder %s was created!\n", i, title);
+      printf("Folder %s was created!\n", title);
       folder.self_index = i;
       sb.entities[i] = folder;
       sb.free_entity[i] = 0;
@@ -56,7 +54,7 @@ entity create_folder(char *title, short ops) {
   return folder;
 }
 
-void run_file_system(FILE *fs) {  // считывает суперблок если фс не пустая, иначе создает и инициализирует его 
+void run_file_system(FILE *fs) {
   fseek(fs, 0, SEEK_END);
 
   if (ftell(fs) > 0) {
@@ -68,14 +66,11 @@ void run_file_system(FILE *fs) {  // считывает суперблок ес�
 
     sb.count_blocks = COMMON_COUNT_BLOCKS;
     sb.id_file_system = 1;
-    sb.size_block = SIZE_BLOCK;
 
     entity root = create_folder("", 7);
-    // strcpy(root.full_name, "/");
     for (size_t i = 0; i < COUNT_ENTITY; i++) root.own_indexes[i] = -1;
     sb.entities[sb.index_current_directory] = root;
   }
-  sb.state = ACTIVE;
 }
 
 char* pwd() {
@@ -105,17 +100,15 @@ void create_file(char *title, short ops) {
   strcpy(file.full_name, full_path);
   
   strcpy(file.title, title);
-  file.operations = ops;
-  file.size = 0;
   file.is_file = 1;
   file.time_creation = time(NULL);
 
   for (size_t i = 0; i < COUNT_BLOCKS_IN_ENTITY; i++) {
-    file.indexes[i] = -1; // значит свободен
+    file.indexes[i] = -1;
   }
   
   for (size_t i = 0; i < COUNT_ENTITY; i++) {
-    if (sb.free_entity[i]) { // тут же привязка по pwd() т.е. sb.entities['pwd'].indexes = i
+    if (sb.free_entity[i]) {
       for (size_t j = 0; j < COUNT_ENTITY; j++) {
         int index = sb.entities[sb.index_current_directory].own_indexes[j];
         if (index == -1) {
@@ -123,7 +116,7 @@ void create_file(char *title, short ops) {
           break;
         }
       }
-      printf("[%d] File %s was created!\n", i, title);
+      printf("File %s was created!\n", title);
       file.self_index = i;
       sb.entities[i] = file;
       sb.free_entity[i] = 0;
@@ -138,16 +131,16 @@ block create_block(FILE *fs, char data[128]) {
   block _block;
   _block.data[0] = '\0';
   int i = 0;
-  for (; data[i] != '\0'; i++) { //+проверка на переполнение блока?
+  for (; data[i] != '\0'; i++) {
     _block.data[i] = data[i];
   }
-  _block.data[i] = '\0'; // тут тоже проверка
+  _block.data[i] = '\0';
 
   return _block;
 }
 
 void write_block(FILE *fs, block _block) {
-  for (size_t i = 0; i < COMMON_COUNT_BLOCKS; i++) { // + проверка на переполнение??
+  for (size_t i = 0; i < COMMON_COUNT_BLOCKS; i++) {
     if (sb.free_blocks[i]) {
       fseek(fs, sizeof(super_block) + sizeof(_block) * i, SEEK_SET);
       char flag = fwrite(&_block, sizeof(_block), 1, fs);
@@ -220,22 +213,29 @@ entity get_entity_by_full_name(char full_name[4096]) {
 
 void ls() {
   entity current = sb.entities[sb.index_current_directory];
-
   for (size_t i = 0; i < COUNT_ENTITY; i++) {
-    if (current.own_indexes[i] != -1) printf("%s\n", sb.entities[current.own_indexes[i]].title);
+    if (current.own_indexes[i] != -1) {
+      struct tm ts = *localtime(&sb.entities[current.own_indexes[i]].time_creation);
+      char buf[80];
+      strftime(buf, sizeof(buf), "%a %Y-%m-%d %H:%M:%S %Z", &ts);
+      printf("%-10s %s\n", sb.entities[current.own_indexes[i]].title, buf);
+    }
   }
 }
 
 
 void change_directory(char *title) {
-  // is_file
-  entity current = get_entity_by_full_name(pwd()); // можно заменить на current_index
+  entity current = get_entity_by_full_name(pwd());
   int is_exist = 0;
   int index = -1;
 
   for (size_t i = 0; i < COUNT_ENTITY; i++) {
     if (!strcmp(sb.entities[current.own_indexes[i]].title, title)) {
       index = current.own_indexes[i];
+      if (sb.entities[index].is_file) {
+        printf("It is not folder!\n");
+        return;
+      }
       is_exist = 1;
       break;
     }
@@ -271,20 +271,6 @@ int main(int argc, char const *argv[]) {
 
   run_file_system(fs);
   system("cls");
-
-  // printf("%s\n", pwd());
-  // create_folder("folder_1", 7);
-  // create_file("file_1", 7);
-  // change_directory("folder_1");
-  // printf("%s", pwd());
-  
-  // create_folder("papka1", 7);
-  // printf("%s", get_entity("papka1").full_name);
-
-  // sb.state = DISACTIVE;
-  // load_super_block(fs);
-  // fclose(fs);
-  // return 0;
 
   char params[2][128];
 
@@ -353,7 +339,6 @@ int main(int argc, char const *argv[]) {
     }
   }
   
-  sb.state = DISACTIVE;
   load_super_block(fs);
   fclose(fs);
   return 0;
