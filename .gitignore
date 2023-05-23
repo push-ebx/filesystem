@@ -1,0 +1,4 @@
+*.exe
+test.c
+/.vscode
+file_system
